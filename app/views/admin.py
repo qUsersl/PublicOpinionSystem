@@ -79,7 +79,6 @@ def delete_user(user_id):
 def settings():
     if request.method == 'POST':
         app_name_val = request.form.get('app_name')
-        logo_url_val = request.form.get('logo_url')
         
         # Update App Name
         app_name = SystemSetting.query.filter_by(key='app_name').first()
@@ -87,13 +86,6 @@ def settings():
             app_name = SystemSetting(key='app_name')
             db.session.add(app_name)
         app_name.value = app_name_val
-        
-        # Update Logo URL
-        logo_url = SystemSetting.query.filter_by(key='logo_url').first()
-        if not logo_url:
-            logo_url = SystemSetting(key='logo_url')
-            db.session.add(logo_url)
-        logo_url.value = logo_url_val
         
         db.session.commit()
         flash('设置更新成功', 'success')

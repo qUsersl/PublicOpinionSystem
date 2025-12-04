@@ -15,12 +15,6 @@
                     </div>
                 </div>
                 <div class="layui-form-item">
-                    <label class="layui-form-label">LOGO链接</label>
-                    <div class="layui-input-block">
-                        <input type="text" name="logo_url" value="{{ settings.get('logo_url', '') }}" class="layui-input">
-                    </div>
-                </div>
-                <div class="layui-form-item">
                     <div class="layui-input-block">
                         <button class="layui-btn" lay-submit>保存设置</button>
                     </div>
@@ -29,6 +23,9 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
 <script>
 layui.use('form', function(){
   var form = layui.form;

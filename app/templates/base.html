@@ -55,6 +55,12 @@
                             <dd class="{{ 'layui-this' if request.endpoint == 'business.analysis' else '' }}">
                                 <a href="{{ url_for('business.analysis') }}">舆情分析</a>
                             </dd>
+                            <dd class="{{ 'layui-this' if request.endpoint == 'business.warehouse' else '' }}">
+                                <a href="{{ url_for('business.warehouse') }}">数据仓库管理</a>
+                            </dd>
+                            <dd class="{{ 'layui-this' if request.endpoint == 'business.rules' else '' }}">
+                                <a href="{{ url_for('business.rules') }}">采集规则库</a>
+                            </dd>
                             <!-- Add more business links here -->
                         </dl>
                     </li>

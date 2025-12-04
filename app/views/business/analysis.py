@@ -1,6 +1,6 @@
 from flask import render_template, request, jsonify, Response, stream_with_context
 from . import business_bp
-from app.utils.scraper import scrape_baidu_generator, scrape_content
+from app.utils.scraper import scrape_baidu_generator, scrape_xinhua_generator, scrape_content, scrape_sohu_generator
 from flask_login import login_required
 from app import db
 from app.models import OpinionData
@@ -11,6 +11,8 @@ import json
 def analysis():
     if request.method == 'POST':
         keyword = request.form.get('keyword')
+        source = request.form.get('source', 'baidu') # Default to baidu
+        
         try:
             pages = int(request.form.get('pages', 1))
         except:
@@ -30,7 +32,15 @@ def analysis():
         
         def generate():
             try:
-                for item in scrape_baidu_generator(keyword, pages=pages, limit=limit):
+                generator = None
+                if source == 'xinhua':
+                    generator = scrape_xinhua_generator(keyword, pages=pages, limit=limit)
+                elif source == 'sohu':
+                    generator = scrape_sohu_generator(keyword, pages=pages, limit=limit)
+                else:
+                    generator = scrape_baidu_generator(keyword, pages=pages, limit=limit)
+                    
+                for item in generator:
                     yield json.dumps(item) + '\n'
             except Exception as e:
                 yield json.dumps({'type': 'error', 'msg': str(e)}) + '\n'

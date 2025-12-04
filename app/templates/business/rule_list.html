@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block title %}采集规则库{% endblock %}
+
+{% block content %}
+<div class="layui-card">
+    <div class="layui-card-header">采集规则库</div>
+    <div class="layui-card-body">
+        <div class="layui-form toolbar">
+            <div class="layui-form-item">
+                <div class="layui-inline">
+                    <input type="text" name="keyword" placeholder="输入站点名称或域名" autocomplete="off" class="layui-input">
+                </div>
+                <div class="layui-inline">
+                    <button class="layui-btn layui-btn-primary" lay-submit lay-filter="searchData">
+                        <i class="layui-icon layui-icon-search"></i> 搜索
+                    </button>
+                </div>
+                <div class="layui-inline">
+                    <button class="layui-btn layui-btn-normal" id="btnAdd">
+                        <i class="layui-icon layui-icon-add-1"></i> 新增规则
+                    </button>
+                </div>
+                <div class="layui-inline">
+                    <button class="layui-btn layui-btn-danger" id="batchDel">
+                        <i class="layui-icon layui-icon-delete"></i> 批量删除
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <table id="dataTable" lay-filter="dataTable"></table>
+    </div>
+</div>
+
+<!-- Actions Template -->
+<script type="text/html" id="tableBar">
+    <a class="layui-btn layui-btn-normal layui-btn-xs" lay-event="edit">编辑</a>
+    <a class="layui-btn layui-btn-danger layui-btn-xs" lay-event="del">删除</a>
+</script>
+
+<!-- Edit Dialog Template -->
+<script type="text/html" id="editDialog">
+    <form class="layui-form" lay-filter="editForm" style="padding: 20px;">
+        <input type="hidden" name="id">
+        <div class="layui-form-item">
+            <label class="layui-form-label">站点名称</label>
+            <div class="layui-input-block">
+                <input type="text" name="site_name" required lay-verify="required" placeholder="请输入站点名称" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">站点域名</label>
+            <div class="layui-input-block">
+                <input type="text" name="domain" placeholder="例如: example.com" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">标题XPath</label>
+            <div class="layui-input-block">
+                <input type="text" name="title_xpath" placeholder="//h1/text()" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">内容XPath</label>
+            <div class="layui-input-block">
+                <input type="text" name="content_xpath" placeholder="//div[@class='content']" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item layui-form-text">
+            <label class="layui-form-label">Headers</label>
+            <div class="layui-input-block">
+                <textarea name="headers" placeholder='{"User-Agent": "..."}' class="layui-textarea" rows="4"></textarea>
+            </div>
+        </div>
+        <div class="layui-form-item layui-form-text">
+            <label class="layui-form-label">备注</label>
+            <div class="layui-input-block">
+                <textarea name="description" placeholder="备注信息" class="layui-textarea"></textarea>
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <div class="layui-input-block">
+                <button class="layui-btn" lay-submit lay-filter="saveRule">保存</button>
+            </div>
+        </div>
+    </form>
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+layui.use(['table', 'form', 'layer', 'jquery'], function(){
+    var table = layui.table;
+    var form = layui.form;
+    var layer = layui.layer;
+    var $ = layui.jquery;
+    
+    // Render Table
+    var tableIns = table.render({
+        elem: '#dataTable',
+        url: "{{ url_for('business.rules_data') }}",
+        page: true,
+        cols: [[
+            {type: 'checkbox', fixed: 'left'},
+            {field: 'id', title: 'ID', width: 80, sort: true},
+            {field: 'site_name', title: '站点名称', width: 150},
+            {field: 'domain', title: '域名', width: 150},
+            {field: 'title_xpath', title: '标题XPath', width: 200},
+            {field: 'content_xpath', title: '内容XPath', width: 200},
+            {field: 'description', title: '备注', minWidth: 150},
+            {field: 'updated_at', title: '更新时间', width: 160, sort: true},
+            {fixed: 'right', title: '操作', toolbar: '#tableBar', width: 150}
+        ]]
+    });
+    
+    // Search
+    form.on('submit(searchData)', function(data){
+        tableIns.reload({
+            where: data.field,
+            page: {curr: 1}
+        });
+        return false;
+    });
+    
+    // Add Button
+    $('#btnAdd').click(function(){
+        openEditDialog();
+    });
+    
+    // Tool Bar Events
+    table.on('tool(dataTable)', function(obj){
+        var data = obj.data;
+        if(obj.event === 'del'){
+            layer.confirm('确定删除该规则吗？', function(index){
+                $.ajax({
+                    url: "{{ url_for('business.delete_rule') }}",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({ids: [data.id]}),
+                    success: function(res){
+                        if(res.code === 0){
+                            obj.del();
+                            layer.msg('删除成功');
+                        } else {
+                            layer.msg('删除失败: ' + res.msg, {icon: 2});
+                        }
+                    }
+                });
+                layer.close(index);
+            });
+        } else if(obj.event === 'edit'){
+            openEditDialog(data);
+        }
+    });
+    
+    // Batch Delete
+    $('#batchDel').click(function(){
+        var checkStatus = table.checkStatus('dataTable');
+        var data = checkStatus.data;
+        if(data.length === 0){
+            layer.msg('请选择要删除的数据');
+            return;
+        }
+        
+        var ids = data.map(function(item){ return item.id; });
+        
+        layer.confirm('确定删除选中的 ' + data.length + ' 条数据吗？', function(index){
+            $.ajax({
+                url: "{{ url_for('business.delete_rule') }}",
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({ids: ids}),
+                success: function(res){
+                    if(res.code === 0){
+                        tableIns.reload();
+                        layer.msg('删除成功');
+                    } else {
+                        layer.msg('删除失败: ' + res.msg, {icon: 2});
+                    }
+                }
+            });
+            layer.close(index);
+        });
+    });
+    
+    // Edit Dialog
+    function openEditDialog(data){
+        var isEdit = !!data;
+        var title = isEdit ? '编辑规则' : '新增规则';
+        var url = isEdit ? "{{ url_for('business.update_rule') }}" : "{{ url_for('business.create_rule') }}";
+        
+        var index = layer.open({
+            type: 1,
+            title: title,
+            area: ['600px', '600px'],
+            content: $('#editDialog').html(),
+            success: function(layero, index){
+                if(isEdit){
+                    form.val('editForm', data);
+                }
+                form.on('submit(saveRule)', function(formData){
+                    // If editing, ensure ID is included (it's in the hidden field, form.val handles it if field matches)
+                    // But form.val might not populate hidden id if not in initial html render context correctly if we just dump html.
+                    // Actually layui form.val works on filter.
+                    
+                    if(isEdit && !formData.field.id){
+                        formData.field.id = data.id;
+                    }
+
+                    $.ajax({
+                        url: url,
+                        type: "POST",
+                        contentType: "application/json",
+                        data: JSON.stringify(formData.field),
+                        success: function(res){
+                            if(res.code === 0){
+                                layer.close(index);
+                                tableIns.reload();
+                                layer.msg(isEdit ? '更新成功' : '创建成功');
+                            } else {
+                                layer.msg('操作失败: ' + res.msg, {icon: 2});
+                            }
+                        }
+                    });
+                    return false;
+                });
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

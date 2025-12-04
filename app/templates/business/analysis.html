@@ -3,57 +3,109 @@
 {% block title %}数据采集管理{% endblock %}
 
 {% block content %}
-<div class="layui-container" style="margin-top: 20px;">
+<style>
+    .search-card { margin-top: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    .search-header { font-weight: bold; font-size: 16px; padding: 15px 20px; border-bottom: 1px solid #f0f0f0; }
+    .layui-form-item { margin-bottom: 0; }
+    .result-card { transition: all 0.3s; border-radius: 8px; border: 1px solid #eee; overflow: hidden; }
+    .result-card:hover { transform: translateY(-5px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+    .card-cover { height: 160px; background: #f8f8f8; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
+    .card-cover img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s; }
+    .result-card:hover .card-cover img { transform: scale(1.05); }
+    .card-content { padding: 15px; }
+    .card-title { font-size: 15px; font-weight: 600; line-height: 1.4; height: 42px; overflow: hidden; margin-bottom: 8px; }
+    .card-title a { color: #333; }
+    .card-title a:hover { color: #1E9FFF; }
+    .card-meta { font-size: 12px; color: #999; margin-bottom: 10px; display: flex; justify-content: space-between; }
+    .card-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid #f6f6f6; }
+    .status-badge { position: absolute; top: 10px; right: 10px; z-index: 10; }
+    .select-checkbox { position: absolute; top: 10px; left: 10px; z-index: 10; transform: scale(1.2); }
+    
+    /* Custom scrollbar for card content if needed */
+    .card-desc { font-size: 12px; color: #666; height: 36px; overflow: hidden; line-height: 1.5; margin-bottom: 10px; }
+</style>
+
+<div class="layui-container">
+    <!-- Search Section -->
     <div class="layui-row layui-col-space15">
         <div class="layui-col-md12">
-            <div class="layui-card">
-                <div class="layui-card-header">数据采集管理</div>
-                <div class="layui-card-body">
+            <div class="layui-card search-card">
+                <div class="layui-card-header search-header">
+                    <i class="layui-icon layui-icon-search" style="margin-right: 8px; color: #1E9FFF;"></i>数据采集配置
+                </div>
+                <div class="layui-card-body" style="padding: 20px;">
                     <form class="layui-form" action="" lay-filter="searchForm">
                         <div class="layui-form-item">
-                            <label class="layui-form-label">关键词</label>
-                            <div class="layui-input-inline" style="width: 300px;">
-                                <input type="text" name="keyword" required lay-verify="required" placeholder="请输入采集关键词" autocomplete="off" class="layui-input">
+                            <div class="layui-inline">
+                                <label class="layui-form-label">数据源</label>
+                                <div class="layui-input-inline" style="width: 150px;">
+                                    <select name="source">
+                                        <option value="baidu" selected>百度搜索</option>
+                                        <option value="xinhua">新华网-四川</option>
+                                        <option value="sohu">搜狐新闻</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="layui-inline">
+                                <label class="layui-form-label">关键词</label>
+                                <div class="layui-input-inline" style="width: 250px;">
+                                    <input type="text" name="keyword" required lay-verify="required" placeholder="请输入采集关键词" autocomplete="off" class="layui-input">
+                                </div>
                             </div>
                             
-                            <label class="layui-form-label">采集页数</label>
-                            <div class="layui-input-inline" style="width: 100px;">
-                                <input type="number" name="pages" value="1" min="1" max="20" class="layui-input" lay-verify="number">
+                            <div class="layui-inline">
+                                <label class="layui-form-label">采集页数</label>
+                                <div class="layui-input-inline" style="width: 100px;">
+                                    <input type="number" name="pages" value="1" min="1" max="20" class="layui-input" lay-verify="number">
+                                </div>
                             </div>
                             
-                            <label class="layui-form-label">数量限制</label>
-                            <div class="layui-input-inline" style="width: 100px;">
-                                <input type="number" name="limit" placeholder="不限" min="1" class="layui-input">
+                            <div class="layui-inline">
+                                <label class="layui-form-label">数量限制</label>
+                                <div class="layui-input-inline" style="width: 100px;">
+                                    <input type="number" name="limit" placeholder="不限" min="1" class="layui-input">
+                                </div>
                             </div>
                             
-                            <div class="layui-input-inline">
-                                <button class="layui-btn" lay-submit lay-filter="formScrape">开始采集</button>
+                            <div class="layui-inline">
+                                <button class="layui-btn layui-btn-normal" lay-submit lay-filter="formScrape">
+                                    <i class="layui-icon layui-icon-release"></i> 开始采集
+                                </button>
                             </div>
                         </div>
                     </form>
                     
                     <!-- Progress Bar -->
-                    <div id="progressContainer" style="display: none; margin-top: 15px;">
+                    <div id="progressContainer" style="display: none; margin-top: 25px; padding: 0 20px;">
                         <div class="layui-progress layui-progress-big" lay-showpercent="true" lay-filter="scrapeProgress">
                             <div class="layui-progress-bar layui-bg-blue" lay-percent="0%"></div>
                         </div>
-                        <div id="progressMsg" style="margin-top: 5px; text-align: center; color: #666;"></div>
+                        <div id="progressMsg" style="margin-top: 10px; text-align: center; color: #666; font-size: 13px;"></div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="layui-row layui-col-space15" id="resultSection" style="display: none;">
+    <!-- Results Section -->
+    <div class="layui-row layui-col-space15" id="resultSection" style="display: none; margin-top: 10px;">
         <div class="layui-col-md12">
-            <div class="layui-card">
-                <div class="layui-card-header">
-                    采集结果
-                    <button class="layui-btn layui-btn-sm layui-btn-normal" style="float: right; margin-top: 5px;" id="btnBatchSave">批量保存入库</button>
-                    <span id="resultCount" style="float: right; margin-right: 10px;"></span>
+            <div class="layui-card" style="border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+                <div class="layui-card-header" style="padding: 0 20px; display: flex; align-items: center; justify-content: space-between;">
+                    <div class="layui-form">
+                        <input type="checkbox" lay-filter="selectAll" title="全选本次结果" lay-skin="primary">
+                        <span style="margin-left: 10px; font-weight: bold;">采集结果</span>
+                    </div>
+                    <div>
+                        <span id="resultCount" style="color: #999; margin-right: 15px; font-size: 12px;"></span>
+                        <button class="layui-btn layui-btn-sm" id="btnBatchSave">
+                            <i class="layui-icon layui-icon-save"></i> 批量入库
+                        </button>
+                    </div>
                 </div>
-                <div class="layui-card-body" style="background-color: #f2f2f2; padding: 10px;">
-                    <div id="dataContainer" class="layui-row layui-col-space15">
+                <div class="layui-card-body" style="background-color: #f8f9fa; padding: 20px;">
+                    <div id="dataContainer" class="layui-row layui-col-space20">
                         <!-- Cards will be inserted here -->
                     </div>
                 </div>
@@ -67,34 +119,50 @@
     {% raw %}
     {{#  layui.each(d.list, function(index, item){ }}
     <div class="layui-col-md3 layui-col-sm6">
-        <div class="layui-card" style="border: 1px solid #e6e6e6;">
-            <div class="layui-card-header" style="height: auto; padding: 10px; min-height: 40px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <input type="checkbox" name="selectItem" value="{{ index }}" lay-skin="primary">
-                    <span class="layui-badge {{ item.is_deep_crawled ? 'layui-bg-green' : 'layui-bg-gray' }}" id="status-{{ index }}">
-                        {{ item.is_deep_crawled ? '已深度采集' : '未深度采集' }}
-                    </span>
-                </div>
-            </div>
-            <div class="layui-card-body" style="height: 320px; overflow: hidden; position: relative;">
-                <div style="text-align: center; margin-bottom: 10px; height: 150px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #f8f8f8;">
+        <div class="layui-card result-card">
+            <div class="layui-card-body" style="padding: 0;">
+                <div class="card-cover">
+                    <div class="select-checkbox">
+                        <input type="checkbox" name="selectItem" value="{{ index }}" lay-skin="primary">
+                    </div>
+                    <div class="status-badge">
+                        <span class="layui-badge {{ item.is_deep_crawled ? 'layui-bg-green' : 'layui-bg-gray' }}" id="status-{{ index }}">
+                            {{ item.is_deep_crawled ? '已深度采集' : '未深度采集' }}
+                        </span>
+                    </div>
+                    
                     {{# if(item.cover){ }}
                     <a href="{{ item.original_url }}" target="_blank" title="点击访问原地址">
-                        <img src="{{ item.cover }}" style="max-width: 100%; max-height: 150px;">
+                        <img src="{{ item.cover }}" alt="{{ item.title }}">
                     </a>
                     {{# } else { }}
-                    <div style="color: #999;">无封面</div>
+                    <a href="{{ item.original_url }}" target="_blank" title="点击访问原地址">
+                        <img src="{{ d.defaultImg }}" alt="默认封面">
+                    </a>
                     {{# } }}
                 </div>
-                <h3 style="font-size: 14px; font-weight: bold; margin-bottom: 5px; height: 40px; overflow: hidden; line-height: 20px;">
-                    <a href="{{ item.original_url }}" target="_blank" style="color: #333;" title="{{ item.title }}">{{ item.title }}</a>
-                </h3>
-                <p style="color: #999; font-size: 12px; margin-bottom: 5px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">来源: {{ item.source }}</p>
                 
-                <div style="position: absolute; bottom: 10px; left: 0; width: 100%; text-align: center;">
-                    <div class="layui-btn-group">
-                        <button class="layui-btn layui-btn-xs layui-btn-warm btn-deep-crawl" data-index="{{ index }}" data-url="{{ item.original_url }}">深度采集</button>
-                        <button class="layui-btn layui-btn-xs btn-save" data-index="{{ index }}">保存</button>
+                <div class="card-content">
+                    <h3 class="card-title">
+                        <a href="{{ item.original_url }}" target="_blank" title="{{ item.title }}">{{ item.title }}</a>
+                    </h3>
+                    
+                    <div class="card-desc" title="{{ item.summary }}">
+                        {{ item.summary || '暂无摘要...' }}
+                    </div>
+                    
+                    <div class="card-meta">
+                        <span><i class="layui-icon layui-icon-website"></i> {{ item.source.length > 10 ? item.source.substring(0, 10) + '...' : item.source }}</span>
+                        <span>{{ item.publish_date || '' }}</span>
+                    </div>
+                    
+                    <div class="card-actions">
+                        <button class="layui-btn layui-btn-primary layui-btn-xs layui-border-blue btn-deep-crawl" data-index="{{ index }}" data-url="{{ item.original_url }}">
+                            <i class="layui-icon layui-icon-engine"></i> 深度采集
+                        </button>
+                        <button class="layui-btn layui-btn-xs btn-save" data-index="{{ index }}">
+                            <i class="layui-icon layui-icon-ok"></i> 保存
+                        </button>
                     </div>
                 </div>
             </div>
@@ -116,12 +184,14 @@ layui.use(['form', 'layer', 'laytpl', 'element'], function(){
   
   var currentData = []; // Store scraped data globally
   var currentKeyword = '';
+  var defaultImgUrl = "{{ url_for('static', filename='img/defalt_img.png') }}";
 
   // Scrape Form Submit
   form.on('submit(formScrape)', function(data){
     currentKeyword = data.field.keyword;
     var pages = data.field.pages;
     var limit = data.field.limit;
+    var source = data.field.source;
 
     // Reset UI
     $('#resultSection').hide();
@@ -129,9 +199,14 @@ layui.use(['form', 'layer', 'laytpl', 'element'], function(){
     element.progress('scrapeProgress', '0%');
     $('#progressMsg').text('准备开始采集...');
     
+    // Reset Select All checkbox
+    $('input[lay-filter="selectAll"]').prop('checked', false);
+    form.render('checkbox');
+    
     // Use native fetch for streaming response
     var formData = new FormData();
     formData.append('keyword', currentKeyword);
+    formData.append('source', source);
     formData.append('pages', pages);
     if(limit) formData.append('limit', limit);
 
@@ -191,10 +266,19 @@ layui.use(['form', 'layer', 'laytpl', 'element'], function(){
     return false;
   });
 
+  // Select All Logic
+  form.on('checkbox(selectAll)', function(data){
+      var child = $('input[name="selectItem"]');
+      child.each(function(index, item){
+          item.checked = data.elem.checked;
+      });
+      form.render('checkbox');
+  });
+
   function renderData(){
       var getTpl = document.getElementById('dataItemTpl').innerHTML;
       var view = document.getElementById('dataContainer');
-      laytpl(getTpl).render({list: currentData}, function(html){
+      laytpl(getTpl).render({list: currentData, defaultImg: defaultImgUrl}, function(html){
           view.innerHTML = html;
           form.render('checkbox'); // Re-render checkboxes
       });

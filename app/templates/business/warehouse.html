@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title %}数据仓库管理{% endblock %}
+
+{% block content %}
+<div class="layui-card">
+    <div class="layui-card-header">数据仓库管理</div>
+    <div class="layui-card-body">
+        <div class="layui-form toolbar">
+            <div class="layui-form-item">
+                <div class="layui-inline">
+                    <input type="text" name="keyword" placeholder="输入标题或内容关键词" autocomplete="off" class="layui-input">
+                </div>
+                <div class="layui-inline">
+                    <button class="layui-btn layui-btn-primary" lay-submit lay-filter="searchData">
+                        <i class="layui-icon layui-icon-search"></i> 搜索
+                    </button>
+                </div>
+                <div class="layui-inline">
+                    <button class="layui-btn layui-btn-normal" id="batchDeepCrawl">
+                        <i class="layui-icon layui-icon-website"></i> 详细内容采集
+                    </button>
+                </div>
+                <div class="layui-inline">
+                    <button class="layui-btn layui-btn-danger" id="batchDel">
+                        <i class="layui-icon layui-icon-delete"></i> 批量删除
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <table id="dataTable" lay-filter="dataTable"></table>
+    </div>
+</div>
+
+<!-- Actions Template -->
+<script type="text/html" id="tableBar">
+    <a class="layui-btn layui-btn-normal layui-btn-xs" lay-event="edit">编辑</a>
+    <a class="layui-btn layui-btn-warm layui-btn-xs" lay-event="deep_crawl">采集</a>
+    <a class="layui-btn layui-btn-warm layui-btn-xs" lay-event="analyze">AI解析</a>
+    <a class="layui-btn layui-btn-danger layui-btn-xs" lay-event="del">删除</a>
+</script>
+
+<!-- Edit Dialog Template -->
+<script type="text/html" id="editDialog">
+    <form class="layui-form" lay-filter="editForm" style="padding: 20px;">
+        <input type="hidden" name="id">
+        <div class="layui-form-item">
+            <label class="layui-form-label">标题</label>
+            <div class="layui-input-block">
+                <input type="text" name="title" required lay-verify="required" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">来源</label>
+            <div class="layui-input-block">
+                <input type="text" name="source" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item layui-form-text">
+            <label class="layui-form-label">内容</label>
+            <div class="layui-input-block">
+                <textarea name="content" class="layui-textarea" rows="10"></textarea>
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <div class="layui-input-block">
+                <button class="layui-btn" lay-submit lay-filter="saveEdit">保存</button>
+            </div>
+        </div>
+    </form>
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+layui.use(['table', 'form', 'layer', 'jquery'], function(){
+    var table = layui.table;
+    var form = layui.form;
+    var layer = layui.layer;
+    var $ = layui.jquery;
+    
+    // Render Table
+    var tableIns = table.render({
+        elem: '#dataTable',
+        url: "{{ url_for('business.warehouse_data') }}",
+        page: true,
+        cols: [[
+            {type: 'checkbox', fixed: 'left'},
+            {field: 'id', title: 'ID', width: 80, sort: true},
+            {field: 'title', title: '标题', minWidth: 200, templet: function(d){
+                return '<a href="'+d.original_url+'" target="_blank" style="color: #1E9FFF;">'+d.title+'</a>';
+            }},
+            {field: 'source', title: '来源', width: 150},
+            {field: 'created_at', title: '采集时间', width: 180, sort: true},
+            {fixed: 'right', title: '操作', toolbar: '#tableBar', width: 200}
+        ]]
+    });
+    
+    // Search
+    form.on('submit(searchData)', function(data){
+        tableIns.reload({
+            where: data.field,
+            page: {curr: 1}
+        });
+        return false;
+    });
+    
+    // Tool Bar Events
+    table.on('tool(dataTable)', function(obj){
+        var data = obj.data;
+        if(obj.event === 'del'){
+            layer.confirm('确定删除该条数据吗？', function(index){
+                $.ajax({
+                    url: "{{ url_for('business.delete_data') }}",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({ids: [data.id]}),
+                    success: function(res){
+                        if(res.code === 0){
+                            obj.del();
+                            layer.msg('删除成功');
+                        } else {
+                            layer.msg('删除失败: ' + res.msg, {icon: 2});
+                        }
+                    }
+                });
+                layer.close(index);
+            });
+        } else if(obj.event === 'edit'){
+            openEditDialog(data);
+        } else if(obj.event === 'analyze'){
+            layer.msg('AI解析功能正在开发中...', {icon: 16, time: 2000});
+            // TODO: Call backend analyze API
+        } else if(obj.event === 'deep_crawl'){
+             layer.confirm('确定要对该数据进行详细内容采集吗？', function(index){
+                layer.close(index);
+                var loadIndex = layer.load(2);
+                
+                $.ajax({
+                    url: "{{ url_for('business.deep_crawl_data') }}",
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ids: [data.id]}),
+                    success: function(res){
+                        layer.close(loadIndex);
+                        if(res.code === 0){
+                            layer.msg(res.msg, {icon: 1});
+                            tableIns.reload();
+                        } else {
+                            layer.msg(res.msg, {icon: 2});
+                        }
+                    },
+                    error: function(xhr){
+                        layer.close(loadIndex);
+                        layer.msg('请求失败: ' + xhr.status, {icon: 2});
+                    }
+                });
+            });
+        }
+    });
+    
+    // Batch Deep Crawl
+    $('#batchDeepCrawl').click(function(){
+        var checkStatus = table.checkStatus('dataTable');
+        var data = checkStatus.data;
+        if(data.length === 0){
+            layer.msg('请选择要采集的数据');
+            return;
+        }
+        
+        var ids = data.map(function(item){ return item.id; });
+        
+        layer.confirm('确定要对选中的 ' + data.length + ' 条数据进行详细内容采集吗？', function(index){
+            layer.close(index);
+            var loadIndex = layer.load(2);
+            
+            $.ajax({
+                url: "{{ url_for('business.deep_crawl_data') }}",
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ids: ids}),
+                success: function(res){
+                    layer.close(loadIndex);
+                    if(res.code === 0){
+                        layer.msg(res.msg, {icon: 1});
+                        tableIns.reload();
+                    } else {
+                        layer.msg(res.msg, {icon: 2});
+                    }
+                },
+                error: function(xhr){
+                    layer.close(loadIndex);
+                    layer.msg('请求失败: ' + xhr.status, {icon: 2});
+                }
+            });
+        });
+    });
+
+    // Batch Delete
+    $('#batchDel').click(function(){
+        var checkStatus = table.checkStatus('dataTable');
+        var data = checkStatus.data;
+        if(data.length === 0){
+            layer.msg('请选择要删除的数据');
+            return;
+        }
+        
+        var ids = data.map(function(item){ return item.id; });
+        
+        layer.confirm('确定删除选中的 ' + data.length + ' 条数据吗？', function(index){
+            $.ajax({
+                url: "{{ url_for('business.delete_data') }}",
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({ids: ids}),
+                success: function(res){
+                    if(res.code === 0){
+                        tableIns.reload();
+                        layer.msg('删除成功');
+                    } else {
+                        layer.msg('删除失败: ' + res.msg, {icon: 2});
+                    }
+                }
+            });
+            layer.close(index);
+        });
+    });
+    
+    // Edit Dialog
+    function openEditDialog(data){
+        var index = layer.open({
+            type: 1,
+            title: '编辑数据',
+            area: ['600px', '500px'],
+            content: $('#editDialog').html(),
+            success: function(layero, index){
+                form.val('editForm', data);
+                form.on('submit(saveEdit)', function(formData){
+                    $.ajax({
+                        url: "{{ url_for('business.update_data') }}",
+                        type: "POST",
+                        contentType: "application/json",
+                        data: JSON.stringify(formData.field),
+                        success: function(res){
+                            if(res.code === 0){
+                                layer.close(index);
+                                tableIns.reload();
+                                layer.msg('保存成功');
+                            } else {
+                                layer.msg('保存失败: ' + res.msg, {icon: 2});
+                            }
+                        }
+                    });
+                    return false;
+                });
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
