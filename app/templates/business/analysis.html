@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+
+{% block title %}数据采集管理{% endblock %}
+
+{% block content %}
+<div class="layui-container" style="margin-top: 20px;">
+    <div class="layui-row layui-col-space15">
+        <div class="layui-col-md12">
+            <div class="layui-card">
+                <div class="layui-card-header">数据采集管理</div>
+                <div class="layui-card-body">
+                    <form class="layui-form" action="" lay-filter="searchForm">
+                        <div class="layui-form-item">
+                            <label class="layui-form-label">关键词</label>
+                            <div class="layui-input-inline" style="width: 300px;">
+                                <input type="text" name="keyword" required lay-verify="required" placeholder="请输入采集关键词" autocomplete="off" class="layui-input">
+                            </div>
+                            
+                            <label class="layui-form-label">采集页数</label>
+                            <div class="layui-input-inline" style="width: 100px;">
+                                <input type="number" name="pages" value="1" min="1" max="20" class="layui-input" lay-verify="number">
+                            </div>
+                            
+                            <label class="layui-form-label">数量限制</label>
+                            <div class="layui-input-inline" style="width: 100px;">
+                                <input type="number" name="limit" placeholder="不限" min="1" class="layui-input">
+                            </div>
+                            
+                            <div class="layui-input-inline">
+                                <button class="layui-btn" lay-submit lay-filter="formScrape">开始采集</button>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <!-- Progress Bar -->
+                    <div id="progressContainer" style="display: none; margin-top: 15px;">
+                        <div class="layui-progress layui-progress-big" lay-showpercent="true" lay-filter="scrapeProgress">
+                            <div class="layui-progress-bar layui-bg-blue" lay-percent="0%"></div>
+                        </div>
+                        <div id="progressMsg" style="margin-top: 5px; text-align: center; color: #666;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="layui-row layui-col-space15" id="resultSection" style="display: none;">
+        <div class="layui-col-md12">
+            <div class="layui-card">
+                <div class="layui-card-header">
+                    采集结果
+                    <button class="layui-btn layui-btn-sm layui-btn-normal" style="float: right; margin-top: 5px;" id="btnBatchSave">批量保存入库</button>
+                    <span id="resultCount" style="float: right; margin-right: 10px;"></span>
+                </div>
+                <div class="layui-card-body" style="background-color: #f2f2f2; padding: 10px;">
+                    <div id="dataContainer" class="layui-row layui-col-space15">
+                        <!-- Cards will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Template for Data Item -->
+<script id="dataItemTpl" type="text/html">
+    {% raw %}
+    {{#  layui.each(d.list, function(index, item){ }}
+    <div class="layui-col-md3 layui-col-sm6">
+        <div class="layui-card" style="border: 1px solid #e6e6e6;">
+            <div class="layui-card-header" style="height: auto; padding: 10px; min-height: 40px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <input type="checkbox" name="selectItem" value="{{ index }}" lay-skin="primary">
+                    <span class="layui-badge {{ item.is_deep_crawled ? 'layui-bg-green' : 'layui-bg-gray' }}" id="status-{{ index }}">
+                        {{ item.is_deep_crawled ? '已深度采集' : '未深度采集' }}
+                    </span>
+                </div>
+            </div>
+            <div class="layui-card-body" style="height: 320px; overflow: hidden; position: relative;">
+                <div style="text-align: center; margin-bottom: 10px; height: 150px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #f8f8f8;">
+                    {{# if(item.cover){ }}
+                    <a href="{{ item.original_url }}" target="_blank" title="点击访问原地址">
+                        <img src="{{ item.cover }}" style="max-width: 100%; max-height: 150px;">
+                    </a>
+                    {{# } else { }}
+                    <div style="color: #999;">无封面</div>
+                    {{# } }}
+                </div>
+                <h3 style="font-size: 14px; font-weight: bold; margin-bottom: 5px; height: 40px; overflow: hidden; line-height: 20px;">
+                    <a href="{{ item.original_url }}" target="_blank" style="color: #333;" title="{{ item.title }}">{{ item.title }}</a>
+                </h3>
+                <p style="color: #999; font-size: 12px; margin-bottom: 5px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">来源: {{ item.source }}</p>
+                
+                <div style="position: absolute; bottom: 10px; left: 0; width: 100%; text-align: center;">
+                    <div class="layui-btn-group">
+                        <button class="layui-btn layui-btn-xs layui-btn-warm btn-deep-crawl" data-index="{{ index }}" data-url="{{ item.original_url }}">深度采集</button>
+                        <button class="layui-btn layui-btn-xs btn-save" data-index="{{ index }}">保存</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{#  }); }}
+    {% endraw %}
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+layui.use(['form', 'layer', 'laytpl', 'element'], function(){
+  var form = layui.form;
+  var layer = layui.layer;
+  var laytpl = layui.laytpl;
+  var element = layui.element;
+  var $ = layui.$;
+  
+  var currentData = []; // Store scraped data globally
+  var currentKeyword = '';
+
+  // Scrape Form Submit
+  form.on('submit(formScrape)', function(data){
+    currentKeyword = data.field.keyword;
+    var pages = data.field.pages;
+    var limit = data.field.limit;
+
+    // Reset UI
+    $('#resultSection').hide();
+    $('#progressContainer').show();
+    element.progress('scrapeProgress', '0%');
+    $('#progressMsg').text('准备开始采集...');
+    
+    // Use native fetch for streaming response
+    var formData = new FormData();
+    formData.append('keyword', currentKeyword);
+    formData.append('pages', pages);
+    if(limit) formData.append('limit', limit);
+
+    fetch("{{ url_for('business.analysis') }}", {
+        method: 'POST',
+        body: formData
+    }).then(response => {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        
+        function readStream() {
+            reader.read().then(({ done, value }) => {
+                if (done) {
+                    $('#progressMsg').text('采集完成');
+                    element.progress('scrapeProgress', '100%');
+                    return;
+                }
+                
+                var chunk = decoder.decode(value, {stream: true});
+                var lines = chunk.split('\n');
+                
+                lines.forEach(line => {
+                    if(!line.trim()) return;
+                    try {
+                        var msg = JSON.parse(line);
+                        if(msg.type === 'progress'){
+                            var percent = Math.floor((msg.current / msg.total) * 100) + '%';
+                            element.progress('scrapeProgress', percent);
+                            $('#progressMsg').text(msg.msg);
+                        } else if (msg.type === 'result'){
+                            currentData = msg.data.map(item => {
+                                item.keyword = currentKeyword;
+                                item.is_deep_crawled = false;
+                                item.content = '';
+                                return item;
+                            });
+                            renderData();
+                            $('#resultSection').show();
+                            layer.msg('采集成功，共找到 ' + currentData.length + ' 条数据');
+                        } else if (msg.type === 'error'){
+                            layer.msg('采集出错: ' + msg.msg, {icon: 2});
+                        }
+                    } catch(e) {
+                        console.error('Parse error', e);
+                    }
+                });
+                
+                readStream();
+            });
+        }
+        readStream();
+    }).catch(err => {
+        console.error(err);
+        layer.msg('请求失败', {icon: 2});
+    });
+    
+    return false;
+  });
+
+  function renderData(){
+      var getTpl = document.getElementById('dataItemTpl').innerHTML;
+      var view = document.getElementById('dataContainer');
+      laytpl(getTpl).render({list: currentData}, function(html){
+          view.innerHTML = html;
+          form.render('checkbox'); // Re-render checkboxes
+      });
+      $('#resultCount').text('共 ' + currentData.length + ' 条');
+  }
+
+  // Deep Crawl Click
+  $(document).on('click', '.btn-deep-crawl', function(){
+      var index = $(this).data('index');
+      var url = $(this).data('url');
+      
+      if(currentData[index].is_deep_crawled){
+          layer.msg('该条目已深度采集');
+          return;
+      }
+      
+      var loadIdx = layer.msg('正在深度采集...', {icon: 16, shade: 0.3, time: 0});
+      
+      $.ajax({
+          url: "{{ url_for('business.deep_crawl') }}",
+          type: "POST",
+          data: {url: url},
+          success: function(res){
+              layer.close(loadIdx);
+              if(res.code === 0){
+                  currentData[index].content = res.content;
+                  currentData[index].is_deep_crawled = true;
+                  
+                  // Update UI
+                  $('#status-' + index).removeClass('layui-bg-gray').addClass('layui-bg-green').text('已深度采集');
+                  layer.msg('深度采集成功');
+              } else {
+                  layer.msg('深度采集失败: ' + res.msg, {icon: 2});
+              }
+          },
+          error: function(){
+              layer.close(loadIdx);
+              layer.msg('请求失败', {icon: 2});
+          }
+      });
+  });
+
+  // Single Save
+  $(document).on('click', '.btn-save', function(){
+      var index = $(this).data('index');
+      saveData([currentData[index]]);
+  });
+
+  // Batch Save
+  $('#btnBatchSave').click(function(){
+      var selectedItems = [];
+      $('input[name="selectItem"]:checked').each(function(){
+          var idx = $(this).val();
+          selectedItems.push(currentData[idx]);
+      });
+      
+      if(selectedItems.length === 0){
+          layer.msg('请先选择要保存的数据');
+          return;
+      }
+      
+      saveData(selectedItems);
+  });
+
+  function saveData(items){
+      var loadIdx = layer.msg('正在保存...', {icon: 16, shade: 0.3, time: 0});
+      
+      $.ajax({
+          url: "{{ url_for('business.save_data') }}",
+          type: "POST",
+          contentType: "application/json",
+          data: JSON.stringify({items: items}),
+          success: function(res){
+              layer.close(loadIdx);
+              if(res.code === 0){
+                  layer.msg(res.msg, {icon: 1});
+              } else {
+                  layer.msg(res.msg, {icon: 2});
+              }
+          },
+          error: function(){
+              layer.close(loadIdx);
+              layer.msg('请求失败', {icon: 2});
+          }
+      });
+  }
+
+});
+</script>
+{% endblock %}

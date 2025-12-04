@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}用户管理{% endblock %}
+
+{% block content %}
+<div class="layui-container">
+    <div class="layui-row" style="margin-top: 20px; margin-bottom: 10px;">
+        <div class="layui-col-md6">
+            <h2>用户管理</h2>
+        </div>
+        <div class="layui-col-md6" style="text-align: right;">
+            <a href="{{ url_for('admin.create_user') }}" class="layui-btn layui-btn-sm">添加用户</a>
+        </div>
+    </div>
+    
+    <table class="layui-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>用户名</th>
+                <th>邮箱</th>
+                <th>角色</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr>
+                <td>{{ user.id }}</td>
+                <td>{{ user.username }}</td>
+                <td>{{ user.email }}</td>
+                <td>{{ user.role.name }}</td>
+                <td>
+                    <a href="{{ url_for('admin.edit_user', user_id=user.id) }}" class="layui-btn layui-btn-xs">编辑</a>
+                    {% if user.username != 'admin' %}
+                    <a href="{{ url_for('admin.delete_user', user_id=user.id) }}" class="layui-btn layui-btn-danger layui-btn-xs" onclick="return confirm('确定要删除吗？')">删除</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,9 @@
+Flask
+SQLAlchemy
+Flask-SQLAlchemy
+Flask-Migrate
+Flask-Login
+pytest
+requests
+beautifulsoup4
+lxml

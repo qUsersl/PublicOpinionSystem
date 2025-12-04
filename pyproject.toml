@@ -1,0 +1,14 @@
+[project]
+name = "public-opinion-system"
+version = "0.1.0"
+description = "Public Opinion System"
+dependencies = [
+    "Flask",
+    "SQLAlchemy",
+    "Flask-SQLAlchemy",
+    "Flask-Migrate",
+    "Flask-Login",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
