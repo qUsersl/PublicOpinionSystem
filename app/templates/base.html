@@ -61,6 +61,9 @@
                             <dd class="{{ 'layui-this' if request.endpoint == 'business.rules' else '' }}">
                                 <a href="{{ url_for('business.rules') }}">采集规则库</a>
                             </dd>
+                            <dd class="{{ 'layui-this' if request.endpoint == 'business.ai_engines' else '' }}">
+                                <a href="{{ url_for('business.ai_engines') }}">AI引擎管理</a>
+                            </dd>
                             <!-- Add more business links here -->
                         </dl>
                     </li>

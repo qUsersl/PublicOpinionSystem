@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+
+{% block title %}AI引擎管理 - 舆情分析系统{% endblock %}
+
+{% block styles %}
+<style>
+    .engine-card {
+        border: 1px solid #eee;
+        transition: all 0.3s;
+        cursor: pointer;
+    }
+    .engine-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        border-color: #009688 !important;
+    }
+    .engine-icon {
+        font-size: 40px;
+        color: #009688;
+        margin-bottom: 10px;
+    }
+    .card-actions {
+        border-top: 1px solid #f6f6f6;
+        padding-top: 10px;
+        margin-top: 10px;
+        text-align: right;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="layui-fluid">
+    <div class="layui-card">
+        <div class="layui-card-header">
+            <span style="font-size: 18px;">AI引擎列表</span>
+            <button class="layui-btn layui-btn-sm layui-btn-normal" style="float: right; margin-top: 10px;" id="btnAdd">
+                <i class="layui-icon">&#xe654;</i> 新增引擎
+            </button>
+        </div>
+        <div class="layui-card-body" style="padding: 20px; background-color: #f2f2f2;">
+            <div class="layui-row layui-col-space15" id="engineList">
+                <!-- Cards will be rendered here by laytpl -->
+                <div class="layui-col-md12" style="text-align: center;">
+                    <i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop" style="font-size: 30px;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Template for Cards -->
+<script id="cardTpl" type="text/html">
+    {% raw %}
+    {{#  layui.each(d.data, function(index, item){ }}
+    <div class="layui-col-md3 layui-col-sm6">
+        <div class="layui-card engine-card">
+            <div class="layui-card-body" style="padding: 20px;">
+                <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                    <div style="flex: 1;">
+                        <h3 style="font-weight: bold; font-size: 16px;">{{ item.provider }}</h3>
+                        <p style="color: #999; font-size: 12px;">{{ item.model_name }}</p>
+                    </div>
+                    <div>
+                        {{# if(item.is_active){ }}
+                        <span class="layui-badge layui-bg-green">已启用</span>
+                        {{# } else { }}
+                        <span class="layui-badge layui-bg-gray">已停用</span>
+                        {{# } }}
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 15px; height: 40px; overflow: hidden;">
+                    <p class="layui-elip" style="color: #666;">
+                        <i class="layui-icon layui-icon-link"></i> {{ item.api_url }}
+                    </p>
+                </div>
+
+                <div class="card-actions">
+                    <button class="layui-btn layui-btn-primary layui-btn-xs btn-edit" lay-event="edit" data-obj='{{ JSON.stringify(item) }}'>
+                        <i class="layui-icon layui-icon-edit"></i> 编辑
+                    </button>
+                    <button class="layui-btn layui-btn-primary layui-btn-xs layui-border-red btn-delete" lay-event="delete" data-id="{{ item.id }}" style="color: #FF5722;">
+                        <i class="layui-icon layui-icon-delete"></i> 删除
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{#  }); }}
+    {{#  if(d.data.length === 0){ }}
+    <div class="layui-col-md12" style="text-align: center; color: #999; padding: 50px;">
+        <i class="layui-icon layui-icon-face-surprised" style="font-size: 50px;"></i>
+        <p>暂无AI引擎，请点击右上角添加</p>
+    </div>
+    {{#  } }}
+    {% endraw %}
+</script>
+
+<!-- Add/Edit Form Template -->
+<script type="text/html" id="engineForm">
+    <form class="layui-form" style="padding: 20px;" lay-filter="engineForm">
+        <input type="hidden" name="id">
+        <div class="layui-form-item">
+            <label class="layui-form-label">服务商</label>
+            <div class="layui-input-block">
+                <input type="text" name="provider" required lay-verify="required" placeholder="如: OpenAI, DeepSeek" autocomplete="off" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">API URL</label>
+            <div class="layui-input-block">
+                <input type="text" name="api_url" required lay-verify="required|url" placeholder="API接口地址" autocomplete="off" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">API Key</label>
+            <div class="layui-input-block">
+                <input type="password" name="api_key" required lay-verify="required" placeholder="API密钥" autocomplete="off" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">模型名称</label>
+            <div class="layui-input-block">
+                <input type="text" name="model_name" required lay-verify="required" placeholder="如: gpt-4, gpt-3.5-turbo" autocomplete="off" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">状态</label>
+            <div class="layui-input-block">
+                <input type="checkbox" name="is_active" lay-skin="switch" lay-text="启用|停用" checked value="true">
+            </div>
+        </div>
+        <div class="layui-form-item" style="text-align: center; margin-top: 30px;">
+            <button class="layui-btn" lay-submit lay-filter="saveEngine">立即提交</button>
+            <button type="button" class="layui-btn layui-btn-primary" id="btnCancel">取消</button>
+        </div>
+    </form>
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+layui.use(['layer', 'form', 'laytpl', 'jquery'], function(){
+    var layer = layui.layer,
+        form = layui.form,
+        laytpl = layui.laytpl,
+        $ = layui.jquery;
+
+    // Load List
+    function loadList() {
+        $.ajax({
+            url: "{{ url_for('business.list_ai_engines') }}",
+            type: 'GET',
+            success: function(res) {
+                if (res.code === 0) {
+                    var getTpl = document.getElementById('cardTpl').innerHTML;
+                    var view = document.getElementById('engineList');
+                    laytpl(getTpl).render(res, function(html){
+                        view.innerHTML = html;
+                    });
+                    bindEvents();
+                } else {
+                    layer.msg('加载失败: ' + res.msg);
+                }
+            },
+            error: function() {
+                layer.msg('网络错误');
+            }
+        });
+    }
+
+    loadList();
+
+    // Bind Events
+    function bindEvents() {
+        // Edit
+        $('.btn-edit').on('click', function() {
+            var data = $(this).data('obj');
+            // JSON.stringify might add quotes that need handling, but laytpl usually handles it if passed correctly.
+            // Since we passed object in data-obj, jquery .data() automatically parses JSON if it's a valid JSON string.
+            // However, single quotes in HTML attributes can be tricky.
+            // Let's ensure we handle it safely.
+            if (typeof data === 'string') {
+                data = JSON.parse(data);
+            }
+            openDialog('编辑AI引擎', data);
+        });
+
+        // Delete
+        $('.btn-delete').on('click', function() {
+            var id = $(this).data('id');
+            layer.confirm('确定要删除该AI引擎配置吗？', function(index){
+                $.ajax({
+                    url: "{{ url_for('business.delete_ai_engine') }}",
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({id: id}),
+                    success: function(res) {
+                        if (res.code === 0) {
+                            layer.msg('删除成功');
+                            loadList();
+                        } else {
+                            layer.msg('删除失败: ' + res.msg);
+                        }
+                    }
+                });
+                layer.close(index);
+            });
+        });
+    }
+
+    // Add Button
+    $('#btnAdd').on('click', function() {
+        openDialog('新增AI引擎');
+    });
+
+    var dialogIndex;
+
+    function openDialog(title, data) {
+        dialogIndex = layer.open({
+            type: 1,
+            title: title,
+            area: ['500px', '450px'],
+            content: document.getElementById('engineForm').innerHTML,
+            success: function(layero, index) {
+                form.render();
+                if (data) {
+                    // Pre-fill form
+                    form.val('engineForm', {
+                        "id": data.id,
+                        "provider": data.provider,
+                        "api_url": data.api_url,
+                        "api_key": data.api_key, // Note: Security risk to show key back? Usually we don't, but for simplicity now we do. Or we can leave it blank to mean "unchanged" but that needs backend logic.
+                        "model_name": data.model_name,
+                        "is_active": data.is_active
+                    });
+                }
+                
+                // Cancel Button
+                $('#btnCancel').on('click', function() {
+                    layer.close(index);
+                });
+            }
+        });
+    }
+
+    // Form Submit
+    form.on('submit(saveEngine)', function(data) {
+        var field = data.field;
+        // Checkbox handling: if unchecked, it's undefined in data.field usually, but with lay-skin switch it might differ.
+        // We set value="true". If checked, it sends "true". If not, it's missing.
+        field.is_active = field.is_active ? true : false;
+        
+        var url = field.id ? "{{ url_for('business.update_ai_engine') }}" : "{{ url_for('business.add_ai_engine') }}";
+        
+        $.ajax({
+            url: url,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(field),
+            success: function(res) {
+                if (res.code === 0) {
+                    layer.close(dialogIndex);
+                    layer.msg(field.id ? '更新成功' : '添加成功');
+                    loadList();
+                } else {
+                    layer.msg('操作失败: ' + res.msg);
+                }
+            }
+        });
+        return false; // Prevent form reload
+    });
+});
+</script>
+{% endblock %}
