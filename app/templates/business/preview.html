@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>内容预览 - {{ item.title }}</title>
+    <meta name="renderer" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='layui-v2.13.2/layui/css/layui.css') }}">
+    <style>
+        body { padding: 20px; background-color: #fff; }
+        .content-container { max-width: 800px; margin: 0 auto; }
+        .article-title { text-align: center; font-size: 24px; font-weight: bold; margin-bottom: 30px; color: #333; }
+        .article-content { font-size: 16px; line-height: 1.8; color: #333; }
+        .article-content img { max-width: 100%; }
+    </style>
+</head>
+<body>
+
+<div class="content-container">
+    {% if detail %}
+        <h1 class="article-title">{{ detail.title }}</h1>
+        <div class="article-content">
+            {% if detail.content %}
+                {{ detail.content | safe | replace('\n', '<br>') }}
+            {% else %}
+                <p style="text-align: center; color: #999;">暂无详细内容</p>
+            {% endif %}
+        </div>
+    {% else %}
+        <div style="text-align: center; padding: 50px;">
+            <i class="layui-icon layui-icon-face-surprised" style="font-size: 50px; color: #FF5722;"></i>
+            <p style="margin-top: 20px; font-size: 18px; color: #666;">{{ msg }}</p>
+            <div style="margin-top: 30px;">
+                <button class="layui-btn layui-btn-normal" id="doCrawl">立即采集</button>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<script src="{{ url_for('static', filename='layui-v2.13.2/layui/layui.js') }}"></script>
+<script>
+layui.use(['jquery', 'layer'], function(){
+    var $ = layui.jquery;
+    var layer = layui.layer;
+    
+    $('#doCrawl').click(function(){
+        var loadIndex = layer.load(2);
+        $.ajax({
+            url: "{{ url_for('business.deep_crawl_data') }}",
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ids: [{{ item.id }}]}),
+            success: function(res){
+                layer.close(loadIndex);
+                if(res.code === 0){
+                    layer.msg('采集成功，正在刷新...', {icon: 1, time: 1000}, function(){
+                        location.reload();
+                    });
+                } else {
+                    layer.msg(res.msg, {icon: 2});
+                }
+            },
+            error: function(xhr){
+                layer.close(loadIndex);
+                layer.msg('请求失败', {icon: 2});
+            }
+        });
+    });
+});
+</script>
+</body>
+</html>

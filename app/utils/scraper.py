@@ -4,6 +4,7 @@ import time
 import random
 from urllib.parse import urljoin
 import json
+import re
 from lxml import html as lxml_html
 
 def is_valid_item(item):
@@ -43,160 +44,6 @@ def is_valid_item(item):
         return False
     return True
 
-def scrape_xinhua_generator(keyword=None, pages=1, limit=None):
-    """
-    Scrape Xinhua News (Sichuan) for a given keyword (optional filtering) with pagination.
-    Target: http://sc.news.cn/scyw.htm
-    
-    Yields:
-        dict: Progress update or final result.
-    """
-    results = []
-    total_collected = 0
-    base_url = "http://sc.news.cn/scyw.htm"
-    
-    # Header for requests
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
-    }
-
-    for page in range(pages):
-        if limit and total_collected >= limit:
-            break
-            
-        yield {'type': 'progress', 'current': page + 1, 'total': pages, 'msg': f'正在采集新华网第 {page+1}/{pages} 页...'}
-        
-        # Xinhua pagination logic (guessing typical CMS pattern)
-        # Page 1: scyw.htm
-        # Page 2: scyw_1.htm? Not verified, so we fallback to only scraping page 1 if > 1 requested for now
-        # OR we can try to detect pagination link.
-        # Given the task, scraping the main page is the primary requirement.
-        
-        current_url = base_url
-        if page > 0:
-             # Try standard pattern for subsequent pages
-             # http://sc.news.cn/scyw_1.htm (This is a guess, common in CMS)
-             # If 404, we stop.
-             current_url = f"http://sc.news.cn/scyw_{page}.htm" 
-        
-        try:
-            response = requests.get(current_url, headers=headers, timeout=10)
-            if response.status_code == 404:
-                if page > 0:
-                    yield {'type': 'progress', 'current': page + 1, 'total': pages, 'msg': f'第 {page+1} 页不存在，停止采集。'}
-                    break
-                else:
-                    response.raise_for_status()
-            
-            response.encoding = 'utf-8' # Explicitly set encoding
-            
-            try:
-                soup = BeautifulSoup(response.text, 'lxml')
-            except:
-                soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Find list container
-            container = soup.find('div', class_='rcon')
-            if not container:
-                 yield {'type': 'error', 'msg': '未找到内容列表'}
-                 break
-            
-            # Find items. Based on analysis: <a href...><li...>...</li></a>
-            # But we should handle cases where <a> might be inside <li> too just in case structure varies.
-            # Analysis showed <a> wraps <li>.
-            
-            links = container.find_all('a')
-            page_results = []
-            
-            for link in links:
-                try:
-                    item = {}
-                    li = link.find('li')
-                    if not li:
-                        # Maybe <li> wraps <a>?
-                        if link.parent.name == 'li':
-                            li = link.parent
-                            # If <li> wraps <a>, then link is the <a> tag.
-                            # But our analysis said <a> wraps <li>.
-                            # Let's stick to what we saw: <a> contains <li>
-                        else:
-                            continue # Skip if not a list item link
-                    
-                    # Title
-                    dt = li.find('dt')
-                    if dt:
-                        item['title'] = dt.get_text(strip=True)
-                    else:
-                        continue
-                    
-                    # URL
-                    item['url'] = urljoin(current_url, link.get('href'))
-                    item['original_url'] = item['url']
-                    
-                    # Keyword filtering if provided
-                    if keyword and keyword.strip() and keyword not in item['title']:
-                         continue
-                         
-                    # Summary
-                    dd = li.find('dd')
-                    item['summary'] = dd.get_text(strip=True) if dd else ''
-                    
-                    # Cover
-                    img = li.find('img')
-                    if img and img.get('src'):
-                        item['cover'] = urljoin(current_url, img.get('src'))
-                    else:
-                        item['cover'] = ''
-                        
-                    # Date
-                    # Date is in a span inside .wztt
-                    wztt = li.find(class_='wztt')
-                    if wztt:
-                         spans = wztt.find_all('span')
-                         # Usually the date is the last span or explicitly check text format
-                         date_str = ''
-                         for span in spans:
-                             txt = span.get_text(strip=True)
-                             if '202' in txt and '-' in txt: # Simple heuristic for date
-                                 date_str = txt
-                                 break
-                         if not date_str and spans:
-                             date_str = spans[-1].get_text(strip=True)
-                         
-                         # Append date to summary or title if needed, or just keep it. 
-                         # The OpinionData model doesn't have a dedicated date field in the structure we use (it has but we usually put it in source or summary).
-                         # Let's append to source.
-                         item['publish_date'] = date_str
-                    
-                    item['source'] = f"新华网-四川 {item.get('publish_date', '')}"
-                    
-                    if is_valid_item(item):
-                        page_results.append(item)
-                    
-                    if limit and total_collected + len(page_results) >= limit:
-                        break
-                        
-                except Exception as e:
-                    print(f"Error parsing Xinhua item: {e}")
-                    continue
-            
-            if not page_results:
-                break
-                
-            results.extend(page_results)
-            total_collected += len(page_results)
-            
-            if page < pages - 1:
-                time.sleep(random.uniform(1, 2))
-                
-        except Exception as e:
-             yield {'type': 'error', 'msg': str(e)}
-             break
-             
-    if limit:
-        results = results[:limit]
-        
-    yield {'type': 'result', 'data': results}
 
 def scrape_baidu_generator(keyword, pages=1, limit=None):
     """
@@ -222,7 +69,7 @@ def scrape_baidu_generator(keyword, pages=1, limit=None):
         yield {'type': 'progress', 'current': page + 1, 'total': pages, 'msg': f'正在采集第 {page+1}/{pages} 页...'}
         
         pn = page * 10
-        url = f"https://www.baidu.com/s?ie=utf-8&f=8&rsv_bp=1&rsv_idx=1&tn=baidu&wd={keyword}&pn={pn}"
+        url = f"https://www.baidu.com/s?rtt=1&bsst=1&cl=2&tn=news&rsv_dl=ns_pc&word={keyword}&pn={pn}"
         
         # Headers provided by user (modified to ensure compatibility)
         headers = {
@@ -346,7 +193,7 @@ def scrape_sohu_generator(keyword, pages=1, limit=None):
         yield {'type': 'progress', 'current': page + 1, 'total': pages, 'msg': f'正在采集搜狐数据(第 {page+1}/{pages} 页)...'}
         
         # Sogou pagination uses 'page' parameter
-        url = f"https://www.sogou.com/web?query=site:sohu.com+{keyword}&page={page+1}"
+        url = f"https://www.sohu.com/web?query=site:sohu.com+{keyword}&page={page+1}"
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -479,19 +326,20 @@ def resolve_baidu_link(baidu_url):
 
 def scrape_content(url):
     """
-    Deep crawl the content of a given URL.
+    Deep crawl the content of a given URL with improved noise filtering and formatting.
     """
     if not url:
         return ""
     
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
     
     try:
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         
+        # Detect encoding
         response.encoding = response.apparent_encoding
         
         try:
@@ -499,14 +347,69 @@ def scrape_content(url):
         except:
             soup = BeautifulSoup(response.text, 'html.parser')
             
-        for script in soup(["script", "style"]):
-            script.extract()
-            
-        text = soup.get_text(separator='\n')
+        # 1. Remove standard junk tags
+        for element in soup(["script", "style", "iframe", "noscript", "header", "footer", "aside", "nav", "form", "svg", "button", "input", "select", "textarea"]):
+            element.extract()
+
+        # 2. Remove junk by class/id heuristics
+        # Keywords often used in non-content areas
+        junk_keywords = ['comment', 'sidebar', 'related', 'recommend', 'ad-', 'ads', 'menu', 'copyright', 'disclaimer', 'share', 'login', 'register', 'search', 'footer', 'header', 'nav']
         
-        lines = (line.strip() for line in text.splitlines())
-        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        text = '\n'.join(chunk for chunk in chunks if chunk)
+        def is_junk(attr_value):
+            if not attr_value:
+                return False
+            if isinstance(attr_value, list):
+                attr_value = " ".join(attr_value)
+            return any(keyword in attr_value.lower() for keyword in junk_keywords)
+
+        # Remove elements with junk classes
+        for element in soup.find_all(attrs={"class": True}):
+             if is_junk(element.get("class")):
+                 element.extract()
+                 
+        # Remove elements with junk ids
+        for element in soup.find_all(attrs={"id": True}):
+             if is_junk(element.get("id")):
+                 element.extract()
+
+        # 3. Try to find the main content area
+        # Heuristic: The container with the most text length
+        # We prioritize 'article' tag or divs with 'content'/'main' in class
+        
+        main_content = None
+        
+        # Priority 1: <article> tag
+        article = soup.find('article')
+        if article:
+            main_content = article
+        
+        # Priority 2: div with specific class names
+        if not main_content:
+            candidates = soup.find_all('div', class_=re.compile(r'(content|article|main|post|detail|news_txt)', re.I))
+            if candidates:
+                # Filter out small candidates
+                valid_candidates = [c for c in candidates if len(c.get_text(strip=True)) > 100]
+                if valid_candidates:
+                    main_content = max(valid_candidates, key=lambda x: len(x.get_text(strip=True)))
+        
+        # Fallback: Use body
+        if not main_content:
+            main_content = soup.body or soup
+
+        # 4. Extract text with better spacing
+        # Use separator='\n\n' to preserve paragraph structure
+        text = main_content.get_text(separator='\n\n')
+        
+        # 5. Clean up whitespace
+        # Split by lines, strip each line
+        lines = [line.strip() for line in text.splitlines()]
+        
+        # Remove empty lines but keep paragraph structure
+        # We allow max 1 consecutive empty line, or just join non-empty lines with \n\n
+        clean_lines = [line for line in lines if line]
+        
+        # Join with double newline to clearly separate paragraphs in plain text
+        text = '\n\n'.join(clean_lines)
         
         return text
     except Exception as e:
@@ -537,6 +440,37 @@ def get_smart_xpath(element):
     except:
         return ""
 
+import re
+
+def resolve_sogou_link(url):
+    """
+    Resolves Sogou intermediate link to actual URL via JS/Meta parsing.
+    """
+    if 'sogou.com/link' not in url:
+        return url
+        
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Cookie": "SUV=1; sct=1;",
+        "Referer": "https://www.sogou.com/"
+    }
+    
+    try:
+        r = requests.get(url, headers=headers, timeout=10)
+        # Check for window.location.replace
+        match = re.search(r'window\.location\.replace\("([^"]+)"\)', r.text)
+        if match:
+            return match.group(1)
+            
+        # Check for meta refresh
+        match = re.search(r'URL=\'([^\']+)\'', r.text)
+        if match:
+            return match.group(1)
+            
+        return url
+    except:
+        return url
+
 def deep_crawl_content(url, rule_config=None):
     """
     Deep crawl content using specific rules (XPath).
@@ -549,13 +483,17 @@ def deep_crawl_content(url, rule_config=None):
         
     Returns:
         tuple: (title, content, new_rule_config)
-               new_rule_config is None if no update needed.
+        new_rule_config is None if no update needed.
     """
     if not url:
         return "", "", None
 
+    # Pre-resolve Sogou links
+    if 'sogou.com/link' in url:
+        url = resolve_sogou_link(url)
+
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
     
     # Merge headers from rule

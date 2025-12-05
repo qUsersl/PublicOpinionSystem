@@ -35,6 +35,7 @@
 
 <!-- Actions Template -->
 <script type="text/html" id="tableBar">
+    <a class="layui-btn layui-btn-primary layui-btn-xs" lay-event="preview">预览</a>
     <a class="layui-btn layui-btn-normal layui-btn-xs" lay-event="edit">编辑</a>
     <a class="layui-btn layui-btn-warm layui-btn-xs" lay-event="deep_crawl">采集</a>
     <a class="layui-btn layui-btn-warm layui-btn-xs" lay-event="analyze">AI解析</a>
@@ -92,8 +93,15 @@ layui.use(['table', 'form', 'layer', 'jquery'], function(){
                 return '<a href="'+d.original_url+'" target="_blank" style="color: #1E9FFF;">'+d.title+'</a>';
             }},
             {field: 'source', title: '来源', width: 150},
+            {field: 'is_deep_crawled', title: '深度采集', width: 100, templet: function(d){
+                if(d.is_deep_crawled){
+                    return '<span class="layui-badge layui-bg-green">已采集</span>';
+                } else {
+                    return '<span class="layui-badge layui-bg-gray">未采集</span>';
+                }
+            }},
             {field: 'created_at', title: '采集时间', width: 180, sort: true},
-            {fixed: 'right', title: '操作', toolbar: '#tableBar', width: 200}
+            {fixed: 'right', title: '操作', toolbar: '#tableBar', width: 250}
         ]]
     });
     
@@ -156,6 +164,16 @@ layui.use(['table', 'form', 'layer', 'jquery'], function(){
                         layer.msg('请求失败: ' + xhr.status, {icon: 2});
                     }
                 });
+            });
+        } else if(obj.event === 'preview'){
+            // Open preview page
+            layer.open({
+                type: 2,
+                title: '内容预览',
+                shadeClose: true,
+                shade: 0.8,
+                area: ['90%', '90%'],
+                content: "{{ url_for('business.preview_data', id=0) }}".replace('0', data.id)
             });
         }
     });

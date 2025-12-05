@@ -1,7 +1,7 @@
 from flask import render_template, request, jsonify, current_app
 from . import business_bp
 from app import db
-from app.models import OpinionData, ScrapingRule
+from app.models import OpinionData, ScrapingRule, OpinionDetail
 from flask_login import login_required
 from datetime import datetime
 from app.utils.scraper import deep_crawl_content
@@ -124,10 +124,22 @@ def deep_crawl_data():
             title, content, new_rule_config = deep_crawl_content(target_url, rule_config)
             
             if title or content:
+                # Save to OpinionDetail
+                detail = OpinionDetail.query.filter_by(opinion_id=item.id).first()
+                if not detail:
+                    detail = OpinionDetail(opinion_id=item.id)
+                    db.session.add(detail)
+                
                 if title:
-                    item.title = title
+                    detail.title = title
+                    # Do NOT update item.title with detailed title, keep original title for list view
+                    # item.title = title 
                 if content:
-                    item.content = content
+                    detail.content = content
+                    # Ensure item.content is NOT updated
+                    # item.content = content 
+                
+                # Update is_deep_crawled status in OpinionData
                 item.is_deep_crawled = True
                 success_count += 1
                 
@@ -143,4 +155,16 @@ def deep_crawl_data():
     except Exception as e:
         db.session.rollback()
         return jsonify({'code': 500, 'msg': str(e)})
+
+@business_bp.route('/warehouse/preview/<int:id>')
+@login_required
+def preview_data(id):
+    item = OpinionData.query.get_or_404(id)
+    detail = OpinionDetail.query.filter_by(opinion_id=id).first()
+    
+    if not detail:
+        return render_template('business/preview.html', item=item, detail=None, msg="尚未进行深度采集或采集失败")
+    
+    return render_template('business/preview.html', item=item, detail=detail)
+
 

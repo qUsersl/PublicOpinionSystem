@@ -1,6 +1,6 @@
 from flask import render_template, request, jsonify, Response, stream_with_context
 from . import business_bp
-from app.utils.scraper import scrape_baidu_generator, scrape_xinhua_generator, scrape_content, scrape_sohu_generator
+from app.utils.scraper import scrape_baidu_generator, scrape_content, scrape_sohu_generator
 from flask_login import login_required
 from app import db
 from app.models import OpinionData
@@ -33,9 +33,7 @@ def analysis():
         def generate():
             try:
                 generator = None
-                if source == 'xinhua':
-                    generator = scrape_xinhua_generator(keyword, pages=pages, limit=limit)
-                elif source == 'sohu':
+                if source == 'sohu':
                     generator = scrape_sohu_generator(keyword, pages=pages, limit=limit)
                 else:
                     generator = scrape_baidu_generator(keyword, pages=pages, limit=limit)
